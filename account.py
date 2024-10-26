@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from anz_observer import BroadcastMessage, LoggingObserver, UserObserver
 
 
 class AccountStrategy(ABC):
@@ -40,22 +41,31 @@ class Account(AccountStrategy):
         self.account_name = account_name
         self.account_number = account_number
         self.amount = init_amount
+        self.broadcaster = BroadcastMessage()
 
     def get_account_info(self):
-        print(f'Account Name: {self.account_name} - Account Number: {self.account_number} - Amount: {self.amount}')
+        return {'Account Name': self.account_name, 'Account Number': self.account_number}
 
     def deposit(self, amount):
         self.amount += amount
+        self.notify_transaction(f"Deposit sucessfully: Account number {self.account_number}")
     
     def withdraw(self, amount):
         self.amount -= amount
+        self.notify_transaction(f"Withdraw sucessfully: Account number {self.account_number}")
 
     def transfer(self, amount, target_account):
         self.amount -= amount
         target_account.receive(amount, self)
+        self.notify_transaction(f"Transfer sucessfully: From {self.account_number} to {target_account.get_account_info().get('Account Number')}")
 
     def receive(self, amount):
         self.amount += amount
+
+    def notify_transaction(self, message):
+        self.broadcaster.extend([LoggingObserver(), UserObserver()])
+        self.broadcaster.broadcast(message)
+
 
 class SavingAccount(Account, SavingAccountStrategy):
     def __init__(self, account_name: str, account_number: str, interest_rate: float, init_amount: float = 0):
@@ -73,10 +83,11 @@ class CheckingAccount(Account, CheckingAccountStrategy):
         self.overdraft_rate = overdraft_rate
 
     def deposit(self, amount):
-        self.amount += amount - self.overdraft_fee
+        Account.deposit(self, amount)
+        self.amount -= self.overdraft_fee
 
     def withdraw(self, amount):
-        self.amount -= amount
+        Account.withdraw(self, amount)
         if self.amount < 0:
             self.overdraft_fee = abs(self.amount)
             self.amount = 0
